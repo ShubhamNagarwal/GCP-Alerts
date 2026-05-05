@@ -1,51 +1,122 @@
+<div align="center">
+
 # GCP Alert Hub
 
-A complete GCP monitoring and alerting solution with **Slack-first notifications**. Built to detect cost spikes, infrastructure changes, and security events in real time.
+### Slack-first GCP monitoring & alerting for cost spikes, VM changes, and billing.
 
-> Implemented for `satschel-nonprod` after a 65% cost spike in March 2026 ($6,741 → $11,149) triggered by GKE autoscaling. All alerts route exclusively to Slack — no email noise.
+Eight production alerts. Three pipelines. One Slack channel.
+Built after a **+65% cost spike** in March 2026 to make sure the next one is caught in hours, not on the next month's bill.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Functions%20Gen2-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/functions)
+[![Cloud Monitoring](https://img.shields.io/badge/Cloud%20Monitoring-Alert%20Policies-34A853?logo=googlecloud&logoColor=white)](https://cloud.google.com/monitoring)
+[![Pub/Sub](https://img.shields.io/badge/Pub%2FSub-Topics-FBBC04?logo=googlecloud&logoColor=white)](https://cloud.google.com/pubsub)
+[![Slack](https://img.shields.io/badge/Slack-Webhooks-4A154B?logo=slack&logoColor=white)](https://api.slack.com/messaging/webhooks)
+[![Status](https://img.shields.io/badge/status-production-success)](#)
+
+[Quickstart](#-quickstart) ·
+[Architecture](#-architecture) ·
+[Alerts](#-alerts-included) ·
+[Sample output](#-sample-slack-notifications) ·
+[Docs](#-documentation) ·
+[Why](#-why-this-exists)
+
+</div>
 
 ---
 
-## Features
+## Highlights
 
-- **8 Production Alerts** covering compute, logging, network, security, and billing
-- **Slack-only notifications** with rich formatting (severity colors, action emojis, full context)
-- **VM change detection** — captures who did what (start/stop/delete/restart/config changes)
-- **Smart deduplication** — one notification per action (uses `operation.last=true`)
-- **GKE autoscaler filtering** — excludes service account noise, only human actions trigger alerts
-- **Billing intelligence** — actual MTD spend, daily run rate, projected month-end cost
-- **Dynamic severity levels** based on budget usage thresholds (75/90/100%)
+- **8 production alerts** across compute, GKE, logging, network egress, IAM, VM lifecycle, and billing.
+- **Slack-only delivery** with severity colors, action emojis, deep links, and full incident context.
+- **Three independent pipelines** — Cloud Monitoring, Log Router → Cloud Function, Budget → Cloud Function — all funneling into one channel.
+- **VM change attribution** — captures *who* did *what* (start / stop / delete / restart / config change) with timestamp, zone, and project.
+- **Smart deduplication** using `operation.last=true` so each action fires exactly one Slack message.
+- **GKE autoscaler noise filtered** by excluding `gserviceaccount.com` principals — only human actions trigger alerts.
+- **Billing intelligence** — actual MTD spend, daily run rate, projected month-end cost, and dynamic severity (75 / 90 / 100% thresholds).
+
+---
+
+## Table of contents
+
+1. [Architecture](#-architecture)
+2. [Alerts included](#-alerts-included)
+3. [Quickstart](#-quickstart)
+4. [Repository layout](#-repository-layout)
+5. [Sample Slack notifications](#-sample-slack-notifications)
+6. [Documentation](#-documentation)
+7. [Why this exists](#-why-this-exists)
+8. [License](#-license)
 
 ---
 
 ## Architecture
 
-```
-GCP Metrics ──────► Cloud Monitoring Alert Policy ──┐
-                                                    │
-GCP Audit Logs ──► Log Router Sink ──► Pub/Sub ─────┼──► Cloud Function ──► Slack
-                                                    │
-GCP Budget ─────────────────────────► Pub/Sub ──────┘    #GCP-Alerts-Nonprod
+Three pipelines, one Slack channel:
+
+```mermaid
+flowchart LR
+    M[GCP Metrics<br/>& Audit Logs] --> CM[Cloud Monitoring<br/>Alert Policies]
+    CM --> NC[Notification Channel<br/>Slack]
+
+    AL[Compute<br/>Audit Logs] --> LR[Log Router Sink<br/>vm-change-alerts]
+    LR --> P1[Pub/Sub<br/>vm-alerts]
+    P1 --> CF1[Cloud Function<br/>vm-alert-to-slack]
+
+    BG[GCP Billing<br/>Budget] --> P2[Pub/Sub<br/>billing-alerts]
+    P2 --> CF2[Cloud Function<br/>billing-alert-to-slack]
+
+    NC --> SLK[#GCP-Alerts-Nonprod]
+    CF1 --> SLK
+    CF2 --> SLK
+
+    classDef gcp fill:#E8F0FE,stroke:#4285F4,color:#1A237E
+    classDef slack fill:#4A154B,stroke:#4A154B,color:#fff
+    class M,CM,NC,AL,LR,P1,CF1,BG,P2,CF2 gcp
+    class SLK slack
 ```
 
-Three pipelines, one destination:
+| Pipeline | Use case | Sources |
+|----------|----------|---------|
+| **Cloud Monitoring** | Threshold-based metric alerts | Compute, GKE, Logging, Egress, IAM |
+| **Log Router → Cloud Function** | Detailed audit-log alerts with attribution | VM lifecycle & configuration |
+| **Budget → Cloud Function** | Billing alerts with run-rate + projections | GCP Cloud Billing budgets |
 
-| Pipeline | Use Case | Triggers |
-|----------|----------|----------|
-| **Cloud Monitoring** | Threshold-based metric alerts | Compute, GKE, Logging, Egress |
-| **Log Router → Cloud Function** | Detailed audit log alerts | VM changes, IAM changes |
-| **Budget → Cloud Function** | Billing alerts with projections | Monthly budget thresholds |
+Full design and trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Alerts included
+
+| # | Alert | Type | Severity |
+|---|-------|------|:--------:|
+| 1 | Compute Engine — Active instances exceed 50 | Metric | `CRITICAL` |
+| 2 | Cloud Logging — k8s container logs > 100 GB/day | Metric | `CRITICAL` |
+| 3 | Cloud Logging — Daily ingestion > 500 GB | Metric | `CRITICAL` |
+| 4 | GKE — Node count exceeds 20 | Metric | `WARNING` |
+| 5 | Network egress — Daily > 500 GB | Metric | `WARNING` |
+| 6 | IAM audit-config change (`SetIamPolicy`) | Log-based | `CRITICAL` |
+| 7 | VM lifecycle & configuration changes | Pipeline | `CRITICAL / HIGH / MEDIUM` |
+| 8 | Billing budget alerts | Pipeline | `DYNAMIC` (INFO → CRITICAL) |
+
+Full reference for every alert (metric, filter, threshold, JSON definition): [`docs/ALERTS.md`](docs/ALERTS.md).
 
 ---
 
 ## Quickstart
 
+> Goal: get every alert deployed against your GCP project, posting to your Slack channel, in under 10 minutes.
+
 ### Prerequisites
 
-- GCP project with billing enabled
-- `gcloud` CLI authenticated
-- Slack workspace with an incoming webhook URL
-- IAM roles: `roles/monitoring.editor`, `roles/logging.admin`, `roles/cloudfunctions.developer`, `roles/pubsub.editor`
+| Tool / Resource | Why |
+|-----------------|-----|
+| GCP project with billing enabled | Hosts the alerts and Cloud Functions |
+| `gcloud` CLI authenticated | Deploys everything |
+| Slack incoming webhook URL | Destination for all alerts ([create one](https://api.slack.com/messaging/webhooks)) |
+| Slack notification channel ID (Cloud Monitoring) | Used by metric alerts |
+| IAM roles: `roles/monitoring.editor`, `roles/logging.admin`, `roles/cloudfunctions.developer`, `roles/pubsub.editor` | To create alerts, sinks, topics, functions |
 
 ### 1. Set environment variables
 
@@ -53,7 +124,7 @@ Three pipelines, one destination:
 export GCP_PROJECT_ID="your-project-id"
 export GCP_REGION="us-central1"
 export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/XXX/YYY/ZZZ"
-export SLACK_CHANNEL_ID="your-monitoring-channel-id"  # GCP notification channel
+export SLACK_CHANNEL_ID="your-monitoring-channel-id"
 ```
 
 ### 2. Deploy everything
@@ -62,7 +133,7 @@ export SLACK_CHANNEL_ID="your-monitoring-channel-id"  # GCP notification channel
 ./scripts/deploy-all.sh
 ```
 
-Or deploy individually:
+Or deploy each pipeline individually:
 
 ```bash
 ./scripts/deploy-monitoring-alerts.sh   # 6 metric alerts
@@ -70,39 +141,25 @@ Or deploy individually:
 ./scripts/deploy-billing-alerts.sh      # Billing budget pipeline
 ```
 
-### 3. Test
+### 3. Smoke test
 
 ```bash
 ./scripts/test-billing-alert.sh
 ./scripts/test-vm-alert.sh
 ```
 
----
-
-## Alerts Included
-
-| # | Alert | Type | Severity |
-|---|-------|------|----------|
-| 1 | Compute Engine — Active Instances Exceed 50 | Metric | CRITICAL |
-| 2 | Cloud Logging — k8s Container Logs > 100 GB/day | Metric | CRITICAL |
-| 3 | Cloud Logging — Daily Ingestion > 500 GB | Metric | CRITICAL |
-| 4 | GKE — Node Count Exceeds 20 | Metric | WARNING |
-| 5 | Network Egress — Daily Exceeds 500 GB | Metric | WARNING |
-| 6 | IAM Audit Config Change — SetIamPolicy | Log-based | CRITICAL |
-| 7 | VM Lifecycle & Configuration Changes | Pipeline | CRITICAL |
-| 8 | Billing Budget Alerts | Pipeline | DYNAMIC |
-
-See [docs/ALERTS.md](docs/ALERTS.md) for full details on each alert.
+Step-by-step deployment + troubleshooting: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
 ---
 
-## Repository Layout
+## Repository layout
 
 ```
 gcp-alert-hub/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
+├── .env.example
 │
 ├── cloud-functions/
 │   ├── billing-alert-to-slack/    # Budget → Slack with projections
@@ -114,7 +171,7 @@ gcp-alert-hub/
 │       ├── requirements.txt
 │       └── README.md
 │
-├── monitoring-alerts/             # JSON definitions for all metric alerts
+├── monitoring-alerts/             # JSON definitions for the 6 metric alerts
 │   ├── compute-instances-exceed-50.json
 │   ├── k8s-container-logs-100gb.json
 │   ├── total-log-ingestion-500gb.json
@@ -131,15 +188,13 @@ gcp-alert-hub/
 │   └── test-vm-alert.sh
 │
 ├── docs/
-│   ├── ALERTS.md             # Detailed alert documentation
+│   ├── ALERTS.md             # Detailed alert reference
 │   ├── ARCHITECTURE.md       # System architecture
 │   ├── DEPLOYMENT.md         # Step-by-step deployment guide
 │   ├── TROUBLESHOOTING.md    # Common issues and fixes
-│   └── COST_CONTEXT.md       # Why these alerts exist
+│   └── COST_CONTEXT.md       # The incident that prompted this repo
 │
 └── examples/
-    ├── slack-message-vm-alert.png
-    ├── slack-message-billing.png
     └── sample-payloads/
         ├── budget-alert.json
         └── vm-audit-log.json
@@ -147,65 +202,104 @@ gcp-alert-hub/
 
 ---
 
-## Sample Slack Notifications
+## Sample Slack notifications
 
-### VM Lifecycle Change
-```
-⚠️ GCP VM Alert - HIGH
+### VM lifecycle change
 
-▶️ VM STARTED
+```text
+⚠️  GCP VM Alert  —  HIGH
+
+▶️  VM STARTED
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VM Name:     testing-instance
-Action:      STARTED
-Category:    Lifecycle Change
-Done By:     user@company.com
-Time:        Apr 03, 2026 12:13:32 UTC
-Zone:        us-central1-b
-Project:     your-project-id
+VM Name      :  testing-instance
+Action       :  STARTED
+Category     :  Lifecycle Change
+Done By      :  user@company.com
+Time         :  Apr 03, 2026 12:13:32 UTC
+Zone         :  us-central1-b
+Project      :  your-project-id
 
-🔗 View VM in Console
+🔗  View VM in Console
 ```
 
-### Billing Alert
+### Billing alert (under threshold)
+
+```text
+✅  GCP Budget Alert  —  INFO
+
+📅  Current Month Billing Status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Billing Period   :  Apr 01, 2026  →  Apr 03, 2026
+Days Elapsed     :  2 of ~30 days
+
+💰  Actual Amount from GCP Billing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Actual Spend (MTD)  :  $295.02 USD
+Budget Limit        :  $7,000.00 USD
+Budget Used         :  4.2%
+Remaining Budget    :  $6,704.98 USD
+
+📈  Projections
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Daily Run Rate      :  $147.51 / day
+Projected Month-End :  $4,425.30 USD
 ```
-✅ GCP Budget Alert - INFO
 
-📅 Current Month Billing Status
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Billing Period: Apr 01, 2026 → Apr 03, 2026
-Days Elapsed:   2 of ~30 days
+### Severity color coding (billing)
 
-💰 Actual Amount from GCP Billing
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Actual Spend (MTD):  $295.02 USD
-Budget Limit:        $7,000.00 USD
-Budget Used:         4.2%
-Remaining Budget:    $6,704.98 USD
-
-📈 Projections
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Daily Run Rate:      $147.51/day
-Projected Month-End: $4,425.30 USD
-```
+| Budget used | Severity | Slack color |
+|:-----------:|:--------:|:-----------:|
+| `< 75%`  | `INFO`     | 🟢 green |
+| `≥ 75%`  | `MEDIUM`   | 🟡 yellow |
+| `≥ 90%`  | `HIGH`     | 🟠 orange |
+| `≥ 100%` | `CRITICAL` | 🔴 red |
 
 ---
 
-## Why This Exists
+## Documentation
 
-In March 2026, our `satschel-nonprod` GCP project bill jumped **+65%** ($6,741 → $11,149) due to GKE autoscaling cascading into log ingestion (644 GB → 7 TB), network egress (2.9 TB → 9.4 TB), and compute costs.
+| Doc | What's inside |
+|-----|---------------|
+| [`docs/ALERTS.md`](docs/ALERTS.md) | Every alert: metric, filter, threshold, JSON definition |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Three-pipeline design and rationale |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Step-by-step deployment runbook |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common issues and fixes |
+| [`docs/COST_CONTEXT.md`](docs/COST_CONTEXT.md) | The March 2026 incident that prompted this repo |
+| [`cloud-functions/billing-alert-to-slack/README.md`](cloud-functions/billing-alert-to-slack/README.md) | Billing function details |
+| [`cloud-functions/vm-alert-to-slack/README.md`](cloud-functions/vm-alert-to-slack/README.md) | VM function details |
+| [`examples/README.md`](examples/README.md) | Sample payloads + manual test recipes |
 
-This repo provides the alerting we wished we had **before** that incident — early warning signals for every layer that contributed to the spike.
+---
 
-See [docs/COST_CONTEXT.md](docs/COST_CONTEXT.md) for the full incident analysis.
+## Why this exists
+
+In **March 2026**, the `satschel-nonprod` GCP project bill jumped **+65%** — from **$6,741 → $11,149** — driven by a GKE autoscaling cascade:
+
+| Service | Normal | March peak | Multiplier |
+|---------|-------:|-----------:|:----------:|
+| Compute instances | 52 | 1,945 | **37×** |
+| Cloud Logging (k8s_container) | 644 GB/mo | 7 TB/mo | **11×** |
+| Network egress | 2.9 TB/mo | 9.4 TB/mo | **3.2×** |
+| Network egress (single day) | ~100 GB | 1,800 GB (Mar 22) | **18×** |
+
+Logging alone accounted for **93%** of the cost increase, because every additional container produced proportional log volume.
+
+This repo is the alerting we wished we had **before** that incident — early-warning signals for every layer that contributed to the spike, plus VM-attribution and billing projections so the next incident is caught in hours.
+
+Full incident analysis and lessons: [`docs/COST_CONTEXT.md`](docs/COST_CONTEXT.md).
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Released under the [MIT License](LICENSE). Use it freely inside your organization or as a starting point for your own alerting layer. Attribution appreciated but not required.
 
 ---
 
-## Author
+<div align="center">
 
-Built by [Shubham Nagarwal](https://github.com/ShubhamNagarwal) at Satschel.
+Built by [**Shubham Nagarwal**](https://github.com/ShubhamNagarwal) at Satschel.
+
+If this saved your team a 65% cost spike, ⭐ the repo.
+
+</div>
