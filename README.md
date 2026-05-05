@@ -298,7 +298,7 @@ Released under the [MIT License](LICENSE). Use it freely inside your organizatio
 
 <div align="center">
 
-Built by [**Shubham Nagarwal**](https://github.com/ShubhamNagarwal) at Satschel.
+Built by [**Shubham Nagarwal**](https://github.com/ShubhamNagarwal)
 
 If this saved your team a 65% cost spike, ⭐ the repo.
 
