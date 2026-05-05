@@ -1,0 +1,24 @@
+{
+  "protoPayload": {
+    "methodName": "v1.compute.instances.stop",
+    "authenticationInfo": {
+      "principalEmail": "user@company.com"
+    },
+    "resourceName": "projects/your-project-id/zones/us-central1-b/instances/blockchain-07"
+  },
+  "resource": {
+    "type": "gce_instance",
+    "labels": {
+      "instance_id": "8561918809178189051",
+      "project_id": "your-project-id",
+      "zone": "us-central1-b"
+    }
+  },
+  "operation": {
+    "first": false,
+    "last": true,
+    "id": "operation-1775220828253-64e8dceddabd9-1b5e9cb8-fc73e059"
+  },
+  "timestamp": "2026-04-03T12:54:42.936192Z",
+  "logName": "projects/your-project-id/logs/cloudaudit.googleapis.com%2Factivity"
+}

@@ -1,0 +1,33 @@
+{
+  "displayName": "GKE - Node Count Exceeds 20",
+  "enabled": true,
+  "severity": "WARNING",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "GKE node count > 20",
+      "conditionThreshold": {
+        "filter": "resource.type=\"k8s_node\" AND metric.type=\"kubernetes.io/node/cpu/allocatable_cores\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 20,
+        "duration": "300s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_COUNT"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "600s" }
+  },
+  "documentation": {
+    "content": "ALERT: GKE node count exceeds 20. GKE autoscaler activity caused the March 2026 spike (52 → 1,945 instances). Early warning for unusual scaling.",
+    "mimeType": "text/markdown"
+  }
+}

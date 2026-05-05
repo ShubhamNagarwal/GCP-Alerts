@@ -1,0 +1,33 @@
+{
+  "displayName": "Cloud Logging - k8s Container Logs Exceed 100 GB/day",
+  "enabled": true,
+  "severity": "CRITICAL",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "k8s_container log bytes > 100 GB/day",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/billing/bytes_ingested\" AND metric.labels.resource_type=\"k8s_container\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 107374182400,
+        "duration": "3600s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "86400s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "3600s" }
+  },
+  "documentation": {
+    "content": "ALERT: k8s_container log ingestion exceeds 100 GB/day. In March 2026, k8s_container logs jumped to 7 TB/month (93% of logging cost increase = +$3,190).",
+    "mimeType": "text/markdown"
+  }
+}

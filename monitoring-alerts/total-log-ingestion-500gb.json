@@ -1,0 +1,33 @@
+{
+  "displayName": "Cloud Logging - Daily Ingestion Exceeds 500 GB",
+  "enabled": true,
+  "severity": "CRITICAL",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Log bytes ingested > 500 GB/day",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/billing/bytes_ingested\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 536870912000,
+        "duration": "3600s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "86400s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "3600s" }
+  },
+  "documentation": {
+    "content": "ALERT: Total log ingestion exceeds 500 GB/day across all sources. Catches ingestion spikes from any source (k8s, VM, load balancer, etc.).",
+    "mimeType": "text/markdown"
+  }
+}

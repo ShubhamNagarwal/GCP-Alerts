@@ -1,0 +1,33 @@
+{
+  "displayName": "Network Egress - Daily Exceeds 500 GB",
+  "enabled": true,
+  "severity": "WARNING",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Network egress > 500 GB/day",
+      "conditionThreshold": {
+        "filter": "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/network/sent_bytes_count\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 536870912000,
+        "duration": "3600s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "86400s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "3600s" }
+  },
+  "documentation": {
+    "content": "ALERT: Daily network egress exceeds 500 GB. In March 2026, egress jumped from 2.9 TB to 9.4 TB/month with a 1,800 GB single-day peak on March 22.",
+    "mimeType": "text/markdown"
+  }
+}

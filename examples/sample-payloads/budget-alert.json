@@ -1,0 +1,8 @@
+{
+  "budgetDisplayName": "satschel-nonprod Monthly Budget",
+  "costAmount": 1500.75,
+  "budgetAmount": 7000,
+  "currencyCode": "USD",
+  "alertThresholdExceeded": 0.21,
+  "costIntervalStart": "2026-04-01T00:00:00Z"
+}

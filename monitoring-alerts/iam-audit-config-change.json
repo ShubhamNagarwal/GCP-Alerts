@@ -1,0 +1,24 @@
+{
+  "displayName": "Audit Config Change Detected - SetIamPolicy",
+  "enabled": true,
+  "severity": "CRITICAL",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Audit log config changed via SetIamPolicy",
+      "conditionMatchedLog": {
+        "filter": "protoPayload.methodName=\"SetIamPolicy\" AND protoPayload.request.policy.auditConfigs:*"
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "300s" },
+    "notificationPrompts": ["OPENED"]
+  },
+  "documentation": {
+    "content": "ALERT: Someone modified the Data Access audit log configuration via SetIamPolicy. This can cause massive Cloud Logging cost increases if DATA_READ/DATA_WRITE are re-enabled for all services.",
+    "mimeType": "text/markdown"
+  }
+}

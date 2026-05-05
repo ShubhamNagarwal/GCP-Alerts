@@ -1,0 +1,33 @@
+{
+  "displayName": "Compute Engine - Active Instances Exceed 50",
+  "enabled": true,
+  "severity": "CRITICAL",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Active instance count > 50",
+      "conditionThreshold": {
+        "filter": "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 50,
+        "duration": "300s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_COUNT",
+            "crossSeriesReducer": "REDUCE_COUNT"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": ["${SLACK_CHANNEL_ID}"],
+  "alertStrategy": {
+    "autoClose": "604800s",
+    "notificationRateLimit": { "period": "300s" }
+  },
+  "documentation": {
+    "content": "ALERT: Active Compute Engine instances exceed 50. This may indicate GKE autoscaling, resource leaks, or unintended VM creation that can drive up costs significantly.",
+    "mimeType": "text/markdown"
+  }
+}
